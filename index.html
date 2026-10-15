@@ -146,6 +146,8 @@ table.mini td.r,table.mini th.r{text-align:right;font-family:var(--f-mono);font-
 .mov .m.out{color:var(--err)}
 .mov small{display:block;color:var(--muted);font-size:.8rem}
 .mov button.x{border:0;background:none;color:var(--muted);cursor:pointer;font-size:.8rem;padding:0;text-decoration:underline}
+.inline{flex-direction:row;align-items:center;gap:10px;font-weight:400;font-size:.95rem}
+.inline input{width:22px;height:22px;flex:none;accent-color:var(--accent)}
 .sk{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:6px 8px 6px 14px}
 .sk.low{border-color:color-mix(in srgb,var(--err) 55%,var(--line));background:color-mix(in srgb,var(--err) 5%,var(--surface))}
 .sk-n{border:0;background:none;text-align:left;font:inherit;color:var(--ink);cursor:pointer;padding:6px 0;min-width:0}
@@ -213,6 +215,7 @@ table.mini td.r,table.mini th.r{text-align:right;font-family:var(--f-mono);font-
     <div class="brand"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="14" fill="none" stroke="var(--accent)" stroke-width="2.4"/><path d="M17 8v9l6 4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg><div><b id="tallerName">Taller</b><small>Caja y órdenes</small></div></div>
     <span class="badge" id="modeBadge"></span>
   </header>
+  <div id="tokNote" hidden class="msg err"></div>
   <div id="demoNote" hidden class="msg info">Modo prueba: los datos son ejemplos y quedan solo en este navegador. Probá cargar, cobrar y cambiar estados sin miedo.</div>
   <nav class="tabs" role="tablist">
     <button type="button" role="tab" aria-selected="true" data-tab="ordenes">Órdenes</button>
@@ -393,6 +396,17 @@ table.mini td.r,table.mini th.r{text-align:right;font-family:var(--f-mono);font-
       <div class="thumbs" id="fThumbs"></div>
       <label class="pick" for="fFotos"><b>Sacar o elegir fotos</b>Frente, tapa trasera, malla y cualquier marca<input type="file" id="fFotos" accept="image/*" multiple></label>
       <div id="fotoMsg"></div>
+
+      <div class="sect">Hermeticidad</div>
+      <div class="row">
+        <label>Lo que marca el reloj<select id="hAtm"><option value="">No indica</option><option>3 ATM (30 m)</option><option>5 ATM (50 m)</option><option>10 ATM (100 m)</option><option>20 ATM (200 m)</option><option>30 ATM o más</option></select></label>
+        <label>Presión de la prueba (bar)<input id="hBar" inputmode="decimal" placeholder="Ej: 5"></label>
+      </div>
+      <div class="row">
+        <label>Prueba al recibirlo<select id="hIn"><option>No se probó</option><option>Pasó</option><option>No pasó</option></select></label>
+        <label>Prueba al entregar<select id="hOut"><option>No se probó</option><option>Pasó</option><option>No pasó</option></select></label>
+      </div>
+      <label class="inline"><input type="checkbox" id="hJuntas"> Se cambiaron juntas (o-rings)</label>
     </div>
 
     <div class="card">
@@ -427,7 +441,7 @@ table.mini td.r,table.mini th.r{text-align:right;font-family:var(--f-mono);font-
 </div>
 
 <!-- Comprobante -->
-<div class="sheet" id="ticket" hidden>
+<div class="sheet" id="ticket" hidden style="z-index:22">
   <div class="wrap">
     <div class="sheethead"><button class="btn ghost small" type="button" id="tClose">← Volver a la orden</button></div>
     <div class="ticket" id="ticketBody"></div>
@@ -556,8 +570,17 @@ var PREVIEW=false;/*PREVIEW*/
     $("demoNote").hidden=mode!=="demo";$("resetDemo").hidden=mode!=="demo";$("logout").hidden=PREVIEW;
     $("connState").textContent=mode==="demo"?(PREVIEW?"Esta es una vista previa con ejemplos. En la versión real los datos se guardan en el repositorio privado del taller.":"Modo prueba: los datos quedan solo en este navegador."):"Guardando en el repositorio privado "+OWNER+"/"+REPO+".";
     pinState();
+    var tf=ls("caja_tok_fecha"),dd=tf?dias(tf):0;$("tokNote").hidden=!(mode==="gh"&&dd>=340);
+    if(!$("tokNote").hidden)$("tokNote").textContent="La clave de GitHub vence en "+Math.max(0,366-dd)+" días. Creá una nueva, desconectá en Ajustes y conectá con la nueva.";
+    lastLoad=Date.now();
     loadAll().catch(function(e){msg("listMsg","err",e.message)});
   }
+  // Si la caja estuvo en segundo plano, se recarga para ver lo que cargaron otros dispositivos
+  var lastLoad=0;
+  document.addEventListener("visibilitychange",function(){
+    if(document.visibilityState!=="visible"||mode!=="gh"||!$("sheet").hidden||Date.now()-lastLoad<60000)return;
+    lastLoad=Date.now();cajas={};loadAll().catch(function(e){msg("listMsg","err",e.message)});
+  });
   document.querySelector(".tabs").onclick=function(e){
     var b=e.target.closest("button");if(!b)return;
     document.querySelectorAll(".tabs button").forEach(function(x){x.setAttribute("aria-selected",x===b)});
@@ -583,7 +606,7 @@ var PREVIEW=false;/*PREVIEW*/
       var info=await r.json();
       if(!info.private)throw new Error("El repositorio "+rp+" es público. Cambialo a privado en GitHub (Settings → Danger Zone → Change visibility) antes de guardar datos de clientes.");
       if(info.permissions&&!info.permissions.push)throw new Error("La clave puede ver el repositorio pero no escribir. Revisá que Contents esté en Read and write.");
-      OWNER=o;REPO=rp;token=t;ls("caja_owner",o);ls("caja_repo",rp);ls("caja_token",t);ls("caja_mode",null);msg("setupMsg","","");show();
+      OWNER=o;REPO=rp;token=t;ls("caja_owner",o);ls("caja_repo",rp);ls("caja_token",t);ls("caja_tok_fecha",hoy());ls("caja_mode",null);msg("setupMsg","","");show();
     }catch(e){msg("setupMsg","err",e.message)}
   };
   var TOK=$("tokLink").href;
@@ -626,10 +649,10 @@ var PREVIEW=false;/*PREVIEW*/
     $("lista").innerHTML=list.length?list.slice(0,150).map(function(o){
       var t=total(o),s=saldo(o),d=dias(desdeEstado(o));
       return'<button type="button" class="order" data-id="'+esc(o.id)+'"><span class="o1"><span class="nro">N° '+esc(o.nro)+'</span><b>'+esc(reloj(o))+'</b><small>'+esc(o.cliente||"Sin nombre")+' · ingresó '+esc(fFecha(o.ingreso))+'</small></span><span class="o2"><span class="st '+stClass(o.estado)+'">'+esc(o.estado)+'</span><small>'+(t?(s?"Debe "+plata(s):"Pagado "+plata(t)):"Sin presupuesto")+(enTaller(o)&&d?" · "+d+" d":"")+'</small></span></button>';
-    }).join(""):'<p class="muted">No hay órdenes '+(filtro==="Todas"?"todavía":"con este filtro")+'. Tocá «+ Orden» para cargar un reloj.</p>';
+    }).join(""):'<p class="muted">'+(ords.length?"No hay órdenes con este filtro.":"Todavía no hay órdenes.")+' Tocá «+ Orden» para cargar un reloj.</p>';
   }
   $("filtro").onclick=function(e){var b=e.target.closest("button");if(!b)return;filtro=b.dataset.e;renderOrdenes()};
-  $("q").oninput=function(){if(this.value.trim())filtro="Todas";renderOrdenes()};
+  $("q").oninput=function(){if(this.value.trim())filtro="Todas";else if(filtro==="Todas")filtro="En el taller";renderOrdenes()};
   $("lista").onclick=$("alertas").onclick=function(e){var g=e.target.closest("[data-go]");if(g){document.querySelector('.tabs [data-tab="'+g.dataset.go+'"]').click();return}var b=e.target.closest("[data-id]");if(b)openOrden(ords.find(function(o){return o.id===b.dataset.id}))};
   $("nueva").onclick=function(){openOrden(null)};
 
@@ -644,17 +667,23 @@ var PREVIEW=false;/*PREVIEW*/
     $("fTipo").value=cur.tipo||"Pulsera";$("fMec").value=cur.mecanismo||"Cuarzo (pila)";$("fGar").value=cur.garantia!=null?cur.garantia:cfg.garantia;
     $("fDel").hidden=!o;$("entregaBox").hidden=true;$("fCliHist").hidden=true;msg("fMsg","","");msg("fotoMsg","","");
     $("pMonto").value="";$("pConc").value=cur.pagos.length?"Saldo":"Seña";
-    renderChecks();renderItems();renderPagos();renderEstado();renderThumbs();
+    var h=cur.herm||{};$("hAtm").value=h.atm||"";$("hBar").value=h.bar||"";$("hIn").value=h.ingreso||"No se probó";$("hOut").value=h.salida||"No se probó";$("hJuntas").checked=!!h.juntas;
+    $("fClose").textContent="← Volver";$("fClose").dataset.sure="";
+    renderChecks();renderItems();renderPagos();renderEstado();renderThumbs();readForm();snap=JSON.stringify(cur);
     $("sheet").hidden=false;$("sheet").scrollTop=0;document.body.style.overflow="hidden";
   }
   function closeOrden(){
     if(curNew&&pendingFotos.length)pendingFotos.forEach(function(p){store.del(p).catch(function(){})});
     $("sheet").hidden=true;document.body.style.overflow="";cur=null;
   }
-  $("fClose").onclick=closeOrden;
+  var snap="";
+  $("fClose").onclick=function(){var b=this;if(cur){readForm();if(JSON.stringify(cur)!==snap&&b.dataset.sure!=="1"){b.dataset.sure="1";b.textContent="¿Salir sin guardar?";setTimeout(function(){b.dataset.sure="";b.textContent="← Volver"},4000);return}}closeOrden()};
   function readForm(){
     [["fDni","dni"],["fCli","cliente"],["fTel","telefono"],["fMarca","marca"],["fModelo","modelo"],["fSerie","serie"],["fFalla","falla"],["fObs","observaciones"],["fNotas","notas"],["fProm","prometido"]].forEach(function(p){cur[p[1]]=$(p[0]).value.trim()});
     cur.tipo=$("fTipo").value;cur.mecanismo=$("fMec").value;cur.garantia=+$("fGar").value||0;
+    var h={atm:$("hAtm").value,bar:$("hBar").value.trim(),ingreso:$("hIn").value,salida:$("hOut").value,juntas:$("hJuntas").checked};
+    var old=cur.herm||{};h.fecha=h.salida!=="No se probó"?(old.salida===h.salida&&old.fecha?old.fecha:hoy()):"";
+    cur.herm=(h.atm||h.bar||h.juntas||h.ingreso!=="No se probó"||h.salida!=="No se probó")?h:null;
     cur.items=Array.prototype.map.call($("fItems").querySelectorAll(".it"),function(r){var it={desc:r.querySelector(".d").value.trim(),monto:num(r.querySelector(".v").value)};if(r.dataset.stock)it.stockId=r.dataset.stock;return it}).filter(function(i){return i.desc||i.monto});
   }
   // Cliente conocido por DNI o teléfono
@@ -724,7 +753,7 @@ var PREVIEW=false;/*PREVIEW*/
     var b=e.target.closest("button");if(!b)return;var est=b.dataset.e;
     if(est==="Presupuestado"){readForm();if(!total(cur)){msg("fMsg","err","Cargá el presupuesto (abajo) antes de marcarlo como presupuestado.");$("fItems").querySelector(".d").focus();return}}
     if(est==="Entregado"){readForm();var s=saldo(cur);$("entregaBox").hidden=false;$("entregaPay").hidden=!s;$("eOk").textContent=s?"Cobrar y entregar":"Entregar";
-      $("entregaTxt").textContent=s?"Le falta pagar "+plata(s)+".":"Está todo pagado.";$("eMonto").value=s||"";$("entregaBox").scrollIntoView({block:"nearest"});return}
+      $("entregaTxt").textContent=(s?"Le falta pagar "+plata(s)+".":"Está todo pagado.")+(cur.herm&&cur.herm.atm&&cur.herm.salida!=="Pasó"?" Ojo: el reloj marca "+cur.herm.atm+" y no figura una prueba de hermeticidad aprobada al entregar.":"");$("eMonto").value=s||"";$("entregaBox").scrollIntoView({block:"nearest"});return}
     setEstado(est);
   };
   $("eNo").onclick=function(){$("entregaBox").hidden=true};
@@ -732,6 +761,9 @@ var PREVIEW=false;/*PREVIEW*/
     $("entregaBox").hidden=true;renderPagos();setEstado("Entregado")};
   $("fSinRep").onclick=function(){var b=this;if(b.dataset.sure!=="1"){b.dataset.sure="1";b.textContent="¿Seguro? Tocá otra vez";setTimeout(function(){b.dataset.sure="";b.textContent="Devolver sin reparar"},4000);return}b.dataset.sure="";b.textContent="Devolver sin reparar";setEstado(SINREP)};
 
+  function hermTxt(h){if(!h)return"";var t=[];if(h.atm)t.push("marca "+h.atm);if(h.ingreso!=="No se probó")t.push("al recibirlo "+h.ingreso.toLowerCase());
+    if(h.salida!=="No se probó")t.push("al entregar "+h.salida.toLowerCase()+(h.bar?" a "+h.bar+" bar":"")+(h.fecha?" el "+fFecha(h.fecha):""));else t.push("sin prueba al entregar, hermeticidad no garantizada");
+    if(h.juntas)t.push("juntas cambiadas");return t.map(function(x){return x.charAt(0).toUpperCase()+x.slice(1)}).join(". ")+"."}
   // WhatsApp al cliente
   function waTexto(o){
     var n=(o.cliente||"").split(" ")[0],hola="Hola"+(n?" "+n:"")+", te escribimos de "+cfg.nombre+". ",r="tu reloj "+reloj(o),nro=" (orden N° "+(o.nro||"")+")";
@@ -740,7 +772,7 @@ var PREVIEW=false;/*PREVIEW*/
       case"Presupuestado":return hola+"Ya revisamos "+r+nro+". El presupuesto es:\n"+(o.items||[]).map(function(i){return"• "+i.desc+": "+plata(i.monto)}).join("\n")+"\nTotal: "+plata(total(o))+". ¿Querés que avancemos con el arreglo?";
       case"En reparación":return hola+"Ya estamos trabajando en "+r+nro+"."+(o.prometido?" Lo tendríamos para el "+fFecha(o.prometido)+".":"");
       case"Terminado":return hola+r.charAt(0).toUpperCase()+r.slice(1)+" ya está listo para retirar"+nro+"."+(saldo(o)?" Saldo a pagar: "+plata(saldo(o))+".":"")+" Te esperamos en "+cfg.direccion+". "+cfg.horario;
-      case"Entregado":return hola+"Gracias por confiarnos "+r+"."+(o.garantia_hasta?" Tiene garantía hasta el "+fFecha(o.garantia_hasta)+".":"");
+      case"Entregado":return hola+"Gracias por confiarnos "+r+"."+(o.garantia_hasta?" Tiene garantía hasta el "+fFecha(o.garantia_hasta)+".":"")+(o.herm&&o.herm.salida==="Pasó"?" Pasó la prueba de hermeticidad"+(o.herm.bar?" a "+o.herm.bar+" bar":"")+".":"");
       default:return hola+r.charAt(0).toUpperCase()+r.slice(1)+" está para retirar sin reparación"+nro+". Te esperamos en "+cfg.direccion+".";
     }
   }
@@ -789,7 +821,7 @@ var PREVIEW=false;/*PREVIEW*/
       Object.entries(usoStock(o,1)).forEach(function(e){delta[e[0]]=(delta[e[0]]||0)-e[1]});
       await saveOrden(o,curNew?"Nueva orden":"Actualizar orden");
       try{await moverStock(delta,"Stock de la orden "+o.nro)}catch(e){msg("fMsg","err","La orden se guardó pero no se pudo descontar el stock: "+e.message);saving=false;$("fSave").disabled=false;return}
-      cur.nro=o.nro;cur.actualizado=o.actualizado;var wasNew=curNew;curNew=false;pendingFotos=[];
+      cur.nro=o.nro;cur.actualizado=o.actualizado;var wasNew=curNew;curNew=false;pendingFotos=[];snap=JSON.stringify(cur);
       $("fNro").textContent="N° "+o.nro;$("fTitle").textContent=reloj(o);$("fDel").hidden=false;renderEstado();
       msg("fMsg","ok",okText||(wasNew?"Orden N° "+o.nro+" guardada. Podés mostrarle el comprobante al cliente.":"Cambios guardados."));
     }catch(e){msg("fMsg","err",e.message)}
@@ -817,6 +849,7 @@ var PREVIEW=false;/*PREVIEW*/
       (o.falla?'<div><b>Pedido del cliente:</b> '+esc(o.falla)+'</div>':"")+
       (t?'<table>'+o.items.map(function(i){return'<tr><td>'+esc(i.desc)+'</td><td class="r">'+plata(i.monto)+'</td></tr>'}).join("")+'<tr><td><b>Total</b></td><td class="r"><b>'+plata(t)+'</b></td></tr>'+o.pagos.map(function(p){return'<tr><td>'+esc(p.concepto)+' '+fFecha(p.fecha)+' ('+esc(p.medio)+')</td><td class="r">− '+plata(p.monto)+'</td></tr>'}).join("")+'<tr><td><b>Saldo</b></td><td class="r"><b>'+plata(saldo(o))+'</b></td></tr></table>':'<div><b>Presupuesto:</b> a confirmar.</div>')+
       '<div>'+(o.prometido?'<b>Fecha estimada:</b> '+fFecha(o.prometido)+'. ':"")+(o.garantia?'<b>Garantía:</b> '+o.garantia+' meses desde la entrega'+(o.garantia_hasta?' (hasta el '+fFecha(o.garantia_hasta)+')':"")+'.':"")+' <b>Estado:</b> '+esc(o.estado)+'.</div>'+
+      (o.herm?'<div><b>Hermeticidad:</b> '+esc(hermTxt(o.herm))+'</div>':"")+
       '<div class="tk-cond">'+esc(cfg.condiciones)+'</div><div class="tk-firma"><div>Firma del cliente</div><div>Firma del taller</div></div>';
     var n=waNum(o.telefono),txt="Comprobante de "+cfg.nombre+"\nOrden N° "+o.nro+" del "+fFecha(o.ingreso)+"\nReloj: "+reloj(o)+(t?"\nTotal: "+plata(t)+"\nPagado: "+plata(pagado(o))+"\nSaldo: "+plata(saldo(o)):"\nPresupuesto: a confirmar")+"\nEstado: "+o.estado+"\nPresentá este número de orden para retirarlo.";
     $("tWa").hidden=!n;if(n)$("tWa").href="https://wa.me/"+n+"?text="+encodeURIComponent(txt);
@@ -890,7 +923,7 @@ var PREVIEW=false;/*PREVIEW*/
     try{
       await loadXlsx();
       var os=ords.filter(function(o){return(o.ingreso||"").slice(0,7)===mes||(o.entrega||"").slice(0,7)===mes}).sort(function(a,b){return String(a.nro).localeCompare(String(b.nro))});
-      var w1=XLSX.utils.json_to_sheet(os.map(function(o){return{"N°":o.nro,"Ingreso":fFecha(o.ingreso),"Cliente":o.cliente,"DNI":o.dni,"Teléfono":o.telefono,"Reloj":reloj(o),"Tipo":o.tipo,"Mecanismo":o.mecanismo,"Trabajo":(o.items||[]).map(function(i){return i.desc}).join(" + "),"Estado":o.estado,"Entrega":fFecha(o.entrega),"Garantía hasta":fFecha(o.garantia_hasta),"Total":total(o),"Pagado":pagado(o),"Saldo":saldo(o)}}));
+      var w1=XLSX.utils.json_to_sheet(os.map(function(o){return{"N°":o.nro,"Ingreso":fFecha(o.ingreso),"Cliente":o.cliente,"DNI":o.dni,"Teléfono":o.telefono,"Reloj":reloj(o),"Tipo":o.tipo,"Mecanismo":o.mecanismo,"Trabajo":(o.items||[]).map(function(i){return i.desc}).join(" + "),"Estado":o.estado,"Entrega":fFecha(o.entrega),"Garantía hasta":fFecha(o.garantia_hasta),"Hermeticidad":o.herm?hermTxt(o.herm):"","Total":total(o),"Pagado":pagado(o),"Saldo":saldo(o)}}));
       var ml=movsMes(mes);
       var w2=XLSX.utils.json_to_sheet(ml.slice().reverse().map(function(m){return{"Fecha":fFecha(m.fecha),"Hora":m.hora,"Tipo":m.tipo==="egreso"?"Egreso":"Ingreso","Concepto":m.concepto,"Medio":m.medio,"Monto":m.tipo==="egreso"?-m.monto:m.monto}}));
       var r=resumen(ml),aoa=[[cfg.nombre+" · Resumen de "+mes],[],["Entró",r.ing],["Salió",r.egr],["Neto",r.ing-r.egr],[],["Medio","Entró","Salió","Neto"]];
@@ -975,7 +1008,7 @@ var PREVIEW=false;/*PREVIEW*/
     var ordenes=[
       o(1,addDays(t,-20),"Ejemplo: Carlos Benítez","27111222","3794 000001","Q&Q","VQ50","Cuarzo (pila)","Entregado",[["Presupuestado",addDays(t,-20)],["En reparación",addDays(t,-20)],["Terminado",addDays(t,-19)],["Entregado",addDays(t,-18)]],[{desc:"Cambio de pila",monto:8000}],[{id:"p1",fecha:addDays(t,-18),hora:"18:10",monto:8000,medio:"Efectivo",concepto:"Pago"}],{entrega:addDays(t,-18),garantia_hasta:addMonths(addDays(t,-18),6)}),
       o(2,addDays(t,-15),"Ejemplo: Laura Sánchez","30222333","3794 000002","Orient","Bambino","Automático","Terminado",[["Presupuestado",addDays(t,-14)],["En reparación",addDays(t,-13)],["Terminado",addDays(t,-9)]],[{desc:"Service completo (automático)",monto:85000}],[{id:"p2",fecha:addDays(t,-13),hora:"10:20",monto:40000,medio:"Transferencia",concepto:"Seña"}],{checks:["Funciona al recibirlo","Cristal rayado"],falla:"Se atrasa y se para de noche"}),
-      o(3,addDays(t,-6),"Ejemplo: Jorge Romero","20333444","3794 000003","Citizen","Eco-Drive BM7100","Solar","En reparación",[["Presupuestado",addDays(t,-5)],["En reparación",addDays(t,-4)]],[{desc:"Cambio de cristal mineral",monto:25000},{desc:"Pulido de caja y malla",monto:35000}],[{id:"p3",fecha:addDays(t,-4),hora:"11:05",monto:20000,medio:"Mercado Pago",concepto:"Seña"}],{prometido:addDays(t,2),checks:["Funciona al recibirlo","Cristal roto","Bisel marcado"]}),
+      o(3,addDays(t,-6),"Ejemplo: Jorge Romero","20333444","3794 000003","Citizen","Eco-Drive BM7100","Solar","En reparación",[["Presupuestado",addDays(t,-5)],["En reparación",addDays(t,-4)]],[{desc:"Cambio de cristal mineral",monto:25000},{desc:"Pulido de caja y malla",monto:35000}],[{id:"p3",fecha:addDays(t,-4),hora:"11:05",monto:20000,medio:"Mercado Pago",concepto:"Seña"}],{prometido:addDays(t,2),checks:["Funciona al recibirlo","Cristal roto","Bisel marcado"],herm:{atm:"10 ATM (100 m)",bar:"",ingreso:"No pasó",salida:"No se probó",juntas:true,fecha:""}}),
       o(4,addDays(t,-4),"Ejemplo: Ana Gómez","35444555","3794 000004","Seiko","5 SNK809","Automático","Presupuestado",[["Presupuestado",addDays(t,-4)]],[{desc:"Service completo (automático)",monto:85000},{desc:"Cambio de corona",monto:30000}],[],{checks:["No funciona","Corona floja o falta"],falla:"Era de mi papá, no anda hace años"}),
       o(5,t,"Ejemplo: Marta Fernández","25555666","3794 000005","Casio","MTP-1302","Cuarzo (pila)","Recibido",[],[],[],{falla:"Cambio de pila y ajustar malla",checks:["No funciona","Malla/correa gastada"]})
     ];
