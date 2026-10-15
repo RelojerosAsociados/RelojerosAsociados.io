@@ -570,6 +570,7 @@ var PREVIEW=false;/*PREVIEW*/
     $("demoNote").hidden=mode!=="demo";$("resetDemo").hidden=mode!=="demo";$("logout").hidden=PREVIEW;
     $("connState").textContent=mode==="demo"?(PREVIEW?"Esta es una vista previa con ejemplos. En la versión real los datos se guardan en el repositorio privado del taller.":"Modo prueba: los datos quedan solo en este navegador."):"Guardando en el repositorio privado "+OWNER+"/"+REPO+".";
     pinState();
+    if(mode==="gh"&&!ls("caja_tok_fecha"))ls("caja_tok_fecha",hoy());
     var tf=ls("caja_tok_fecha"),dd=tf?dias(tf):0;$("tokNote").hidden=!(mode==="gh"&&dd>=340);
     if(!$("tokNote").hidden)$("tokNote").textContent="La clave de GitHub vence en "+Math.max(0,366-dd)+" días. Creá una nueva, desconectá en Ajustes y conectá con la nueva.";
     lastLoad=Date.now();
