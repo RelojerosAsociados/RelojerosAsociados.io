@@ -551,7 +551,7 @@ var PREVIEW=false;/*PREVIEW*/
     store=mode==="gh"?GH:DEMO;
     $("lock").hidden=!locked;$("setup").hidden=locked||!!mode;$("app").hidden=locked||!mode;
     if(locked){setTimeout(function(){$("pinIn").focus()},50);return}
-    if(!mode){$("sOwner").value=OWNER;return}
+    if(!mode){$("sOwner").value=OWNER||"RelojerosAsociados";tokLink();return}
     $("modeBadge").textContent=mode==="demo"?"Modo prueba":"Conectado";$("modeBadge").className="badge"+(mode==="demo"?" demo":"");
     $("demoNote").hidden=mode!=="demo";$("resetDemo").hidden=mode!=="demo";$("logout").hidden=PREVIEW;
     $("connState").textContent=mode==="demo"?(PREVIEW?"Esta es una vista previa con ejemplos. En la versión real los datos se guardan en el repositorio privado del taller.":"Modo prueba: los datos quedan solo en este navegador."):"Guardando en el repositorio privado "+OWNER+"/"+REPO+".";
@@ -586,6 +586,9 @@ var PREVIEW=false;/*PREVIEW*/
       OWNER=o;REPO=rp;token=t;ls("caja_owner",o);ls("caja_repo",rp);ls("caja_token",t);ls("caja_mode",null);msg("setupMsg","","");show();
     }catch(e){msg("setupMsg","err",e.message)}
   };
+  var TOK=$("tokLink").href;
+  function tokLink(){var o=$("sOwner").value.trim();$("tokLink").href=TOK+(o?"&target_name="+encodeURIComponent(o):"")}
+  $("sOwner").addEventListener("input",tokLink);
   $("sDemo").onclick=function(){ls("caja_mode","demo");show()};
   $("logout").onclick=function(){ls("caja_token",null);ls("caja_mode",null);token="";cajas={};show()};
   $("resetDemo").onclick=function(){var b=this;if(b.dataset.sure!=="1"){b.dataset.sure="1";b.textContent="¿Seguro? Se borra lo que cargaste";setTimeout(function(){b.dataset.sure="";b.textContent="Volver a los ejemplos"},4000);return}
